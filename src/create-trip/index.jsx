@@ -21,6 +21,7 @@ import { useGoogleLogin } from "@react-oauth/google";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/service/firebaseConfig";
 import { AiOutlineLoading3Quarters } from "react-icons/ai";
+import { useNavigate } from "react-router-dom";
 
 export default function CreateTrip() {
   const [inputValue, setInputValue] = useState("");
@@ -28,6 +29,7 @@ export default function CreateTrip() {
   const [formData, setFormData] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Check if the script is already added
@@ -138,16 +140,14 @@ export default function CreateTrip() {
       .replace("{travelers}", formData?.traveler)
       .replace("{noOfDays}", formData?.noOfDays)
       .replace("{budget}", formData?.budget);
-    // console.log("Final Prompt:", FINAL_PROMPT);
+    console.log("Final Prompt:", FINAL_PROMPT);
 
     try {
       // Structured input for Google GenAI API
       const result = await chat.sendMessage({
         message: FINAL_PROMPT,
       });
-
       console.log("API Response:", result?.text); // Access response text
-      saveAITrip(result?.text);
       setLoading(false);
 
       toast("Trip generated successfully!", {
@@ -155,6 +155,8 @@ export default function CreateTrip() {
         icon: "✅",
         position: "top-right",
       });
+
+      await saveAITrip(result?.text);
     } catch (error) {
       console.error("Error sending message:", error);
       toast("Failed to generate trip. Please try again.", {
@@ -202,6 +204,8 @@ export default function CreateTrip() {
       userEmail: user?.email,
       id: documentId,
     });
+
+    navigate("/view-trip/" + documentId);
   };
 
   return (
