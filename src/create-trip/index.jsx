@@ -1,13 +1,33 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SelectBudgetOptions, SelectTravelList } from "@/constants/options";
+import {
+  AI_PROMPT,
+  SelectBudgetOptions,
+  SelectTravelList,
+} from "@/constants/options";
+import { chat } from "@/service/AIModal";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { FaGoogle } from "react-icons/fa";
+import { useGoogleLogin } from "@react-oauth/google";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "@/service/firebaseConfig";
+import { AiOutlineLoading3Quarters } from "react-icons/ai";
 
 export default function CreateTrip() {
   const [inputValue, setInputValue] = useState("");
   const [predictions, setPredictions] = useState([]);
   const [formData, setFormData] = useState([]);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     // Check if the script is already added
@@ -86,7 +106,13 @@ export default function CreateTrip() {
     }));
   };
 
-  const onGenerateTrip = () => {
+  const onGenerateTrip = async () => {
+    const user = localStorage.getItem("user");
+    if (!user) {
+      setOpenDialog(true);
+      return;
+    }
+
     if (
       (formData?.noOfDays > 5 && !formData?.destination) ||
       !formData?.budget ||
@@ -103,7 +129,79 @@ export default function CreateTrip() {
       return;
     }
 
-    console.log("Final Form Data:", formData);
+    setLoading(true);
+
+    const FINAL_PROMPT = AI_PROMPT.replace(
+      "{destination}",
+      formData?.destination
+    )
+      .replace("{travelers}", formData?.traveler)
+      .replace("{noOfDays}", formData?.noOfDays)
+      .replace("{budget}", formData?.budget);
+    // console.log("Final Prompt:", FINAL_PROMPT);
+
+    try {
+      // Structured input for Google GenAI API
+      const result = await chat.sendMessage({
+        message: FINAL_PROMPT,
+      });
+
+      console.log("API Response:", result?.text); // Access response text
+      saveAITrip(result?.text);
+      setLoading(false);
+
+      toast("Trip generated successfully!", {
+        style: { background: "#d4edda", color: "#155724" },
+        icon: "✅",
+        position: "top-right",
+      });
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast("Failed to generate trip. Please try again.", {
+        style: { background: "#f8d7da", color: "#721c24" },
+        icon: "❌",
+        position: "top-right",
+      });
+    }
+  };
+
+  const login = useGoogleLogin({
+    onSuccess: (response) => getUserProfile(response),
+    onError: (error) => console.log(error),
+  });
+
+  const getUserProfile = async (tokenInfo) => {
+    try {
+      const user = await fetch(
+        `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${tokenInfo?.access_token}`,
+        {
+          headers: {
+            Authorization: `Bearer ${tokenInfo?.access_token}`,
+            Accept: "application/json",
+          },
+        }
+      );
+      const userData = await user.json();
+      console.log("User Data:", userData);
+      localStorage.setItem("user", JSON.stringify(userData));
+      setOpenDialog(false);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const saveAITrip = async (TripData) => {
+    const user = JSON.parse(localStorage.getItem("user"));
+    const documentId = Date.now().toString();
+    const cleanedTripData = TripData.replace(/```/g, "")
+      .replace(/json/g, "")
+      .trim();
+    await setDoc(doc(db, "AITrips", documentId), {
+      userSelection: formData,
+      tripData: JSON.parse(cleanedTripData),
+      userEmail: user?.email,
+      id: documentId,
+    });
   };
 
   return (
@@ -168,10 +266,10 @@ export default function CreateTrip() {
           <div className="grid grid-cols-3 gap-5 mt-5">
             {SelectBudgetOptions.map((option, index) => (
               <div
-                onClick={() => handleOtherInputChanges("budget", option.title)}
+                onClick={() => handleOtherInputChanges("budget", option.budget)}
                 key={index}
                 className={`p-4 border rounded-lg cursor-pointer hover:shadow-lg text-center ${
-                  formData?.budget === option.title &&
+                  formData?.budget === option.budget &&
                   "shadow-lg border-blue-500"
                 }`}
               >
@@ -208,8 +306,33 @@ export default function CreateTrip() {
         </div>
 
         <div className="my-10 flex justify-end">
-          <Button onClick={onGenerateTrip}>Generate Trip</Button>
+          <Button onClick={onGenerateTrip} disabled={loading}>
+            {loading ? (
+              <AiOutlineLoading3Quarters className="h-7 w-7 animate-spin" />
+            ) : (
+              "Generate Trip"
+            )}
+          </Button>
         </div>
+
+        <Dialog open={openDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogDescription>
+                <img src="/logo.svg" alt="Logo" className="w-20 mb-5" />
+                <h2 className="font-bold text-lg mt-7">Sign In With Google</h2>
+                <p>Sign in to the App with Google authentication securely</p>
+                <Button
+                  onClick={login}
+                  className="w-full mt-5 flex gap-4 items-center"
+                >
+                  <FaGoogle className="h-7 w-7" />
+                  Sign In With Google
+                </Button>
+              </DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
