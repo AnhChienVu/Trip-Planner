@@ -1,3 +1,4 @@
+import { modelResponse } from "@/service/AIModal";
 export const SelectTravelList = [
   {
     id: 1,
@@ -102,5 +103,4 @@ export const SelectBudgetOptions = [
   },
 ];
 
-export const AI_PROMPT =
-  "Generate a travel itinerary for a trip to {destination} for {travelers} travelers in {noOfDays}, with a budget of {budget}. Include activities, accommodations, and dining options. Make it fun and engaging!";
+export const AI_PROMPT = `Generate a travel itinerary for a trip to {destination} for {travelers} travelers in {noOfDays} day(s), with a budget of $ {budget}. Include activities, accommodations, and dining options. Make it fun and engaging! Also Give me a list of 3 hotels. Follow this response format: ${modelResponse}. For the best time to visit field, you only need to provide the time from .. AM(or PM) to ..AM(or PM)`;
